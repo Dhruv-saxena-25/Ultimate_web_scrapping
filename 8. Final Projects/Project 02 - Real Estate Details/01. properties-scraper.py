@@ -162,7 +162,7 @@ while True:
 	else:
 		try:
 			driver.execute_script("window.scrollBy(0, arguments[0].getBoundingClientRect().top - 100);", next_page_button)
-			time.sleep(2)
+			time.sleep(1)
 	
 			# Scrape the data
 			rows = driver.find_elements(By.CLASS_NAME, "tupleNew__contentWrap")
@@ -176,7 +176,7 @@ while True:
 
 				# Property location
 				try:
-					location = row.find_element(By.CLASS_NAME, "tupleNew__tupleHeadingTopaz").text
+					location = row.find_element(By.CSS_SELECTOR, ".tupleNew__tupleHeadingTopaz, .tupleNew__tupleHeading, .tupleNew__tupleHeadingPlat").text
 				except:
 					location = np.nan
 					print("Location not found")
@@ -196,21 +196,19 @@ while True:
 					print("Area and BHK not found")
 				else:
 					area, bhk = [ele.text for ele in elements]
-			
-   			# store data in dictionary			
-			property = {
-					"name": name,
-					"location": location,
-					"price": price,
-					"area": area,
-					"bhk": bhk	
-				}
-   
-			print(property)
+				
+				# store data in dictionary			
+				property = {
+						"name": name,
+						"location": location,
+						"price": price,
+						"area": area,
+						"bhk": bhk	
+					}
 
-			# append dictionary to data list
-			data.append(property)	
-	
+				# append dictionary to data list
+				data.append(property)	
+		
 			# click on Next Page button
 			wait.until(
 				EC.element_to_be_clickable((By.XPATH, "//a[normalize-space()='Next Page >']"))
@@ -219,9 +217,106 @@ while True:
 		except:
 			print("Timeout while clicking on \"Next Page\".\n")
     
-        
+# Scrape data form the last page
+rows = driver.find_elements(By.CLASS_NAME, "tupleNew__contentWrap")
+for row in rows:
+	# Property Name
+	try:
+		name = row.find_element(By.CLASS_NAME, "tupleNew__headingNrera").text
+	except:
+		name = 	np.nan
+		print("Name not found")
 
+	# Property location
+	try:
+		location = row.find_element(By.CSS_SELECTOR, ".tupleNew__tupleHeadingTopaz, .tupleNew__tupleHeading").text
+	except:
+		location = np.nan
+		print("Location not found")
+	
+	# Property price
+	try:
+		price = row.find_element(By.CLASS_NAME, "tupleNew__priceValWrap").text
+	except:
+		price = np.nan
+		print("Price not found")
+
+	# property area and bhk
+	try:
+		elements = row.find_elements(By.CLASS_NAME, "tupleNew__area1Type")
+	except:
+		area, bhk =[np.nan, np.nan]
+		print("Area and BHK not found")
+	else:
+		area, bhk = [ele.text for ele in elements]
+	
+	# store data in dictionary			
+	property = {
+			"name": name,
+			"location": location,
+			"price": price,
+			"area": area,
+			"bhk": bhk	
+		}
+
+	# append dictionary to data list
+	data.append(property)    
 
 time.sleep(1)   
 driver.quit()
+
+
+# ----- CLEANING THE DATA -----
+df_properties = (
+    pd
+    .DataFrame(data)
+    .drop_duplicates()
+    .apply(lambda col: col.str.strip().str.lower() if col.dtype == "object" else col)
+    .assign(
+        starred = lambda df_: df_['name'].str.extract(r'\n([\d.]+)')[0].fillna(0).astype(float),
+        name = lambda df_: (
+            df_['name']
+            .str.replace("\n[0-9.]+", "", regex=True)
+            .str.strip()
+            .replace("adroit district s", "adroit district's")
+        ),
+        location = lambda df_: (
+            df_['location']
+            .str.replace("chennai", "")
+            .str.strip()
+            .str.replace(",$", "", regex=True)
+            .str.split("in")
+            .str[-1]
+            .str.strip()
+        ),
+        price = lambda df_: (
+            df_['price']
+            .loc[df_['price'].str.strip().str.lower() != 'price on request']
+            .str.replace("₹", "")
+            .str.strip()
+            .apply(lambda val: float(val.replace("lac", "").strip()) if "lac" in val else float(val.replace("cr", "").strip()) * 100)
+        ),
+        area = lambda df_: (
+            df_['area']
+            .str.replace("sqft", "", regex=True)
+            .str.strip()
+			.str.replace(",", "")
+            .pipe(lambda ser: pd.to_numeric(ser))
+        ),
+        bhk=lambda df_: (
+			df_['bhk']
+			.str.replace("bhk", "")
+			.str.strip()
+			.pipe(lambda ser: pd.to_numeric(ser))
+		)
+    )
+    .rename(columns={
+		"price": "price (in lacs)",
+		"area": "area (in sqft)"
+	})
+    .reset_index(drop=True)
+    .to_csv("chennai-properties-99acres.csv", index=False)
+    
+)
+print("Data cleaning is completed and the cleaned data is saved as 'chennai-properties-99acres.csv' file.\n")
 
