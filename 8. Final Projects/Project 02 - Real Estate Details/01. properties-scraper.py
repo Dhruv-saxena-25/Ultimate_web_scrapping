@@ -42,6 +42,12 @@ def wait_for_page_to_load(driver, wait):
 options = uc.ChromeOptions()
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-blink-features=AutomationControlled")
+options.add_argument("--incognito")
+options.add_argument("--ignore-certificate-errors")
+options.add_argument("--enable-features=NetworkServiceInProcess")
+options.add_argument("--disable-features=NetworkService")
+
+
 driver = uc.Chrome(options=options,use_subprocess=True)
 driver.maximize_window()
 
@@ -117,6 +123,7 @@ ready_to_move = wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="app"]
 ready_to_move.click()  
 time.sleep(1)
 
+
 # moving to the right side to unhide remaining filters
 while True:
     try:
@@ -147,6 +154,7 @@ page_count = 0
 while True:
 	page_count += 1
 	try:
+		time.sleep(2)
 		next_page_button = driver.find_element(By.XPATH, "//a[normalize-space()='Next Page >']")
 	except:
 		print(f"Timeout because we have navigated all the {page_count} pages.\n")
@@ -156,44 +164,54 @@ while True:
 			driver.execute_script("window.scrollBy(0, arguments[0].getBoundingClientRect().top - 100);", next_page_button)
 			time.sleep(2)
 	
-			# scraping the data
-			rows = driver.find_elements(By.CLASS_NAME, "tupleNew__TupleContent")
+			# Scrape the data
+			rows = driver.find_elements(By.CLASS_NAME, "tupleNew__contentWrap")
 			for row in rows:
-				# property name
+				# Property Name
 				try:
 					name = row.find_element(By.CLASS_NAME, "tupleNew__headingNrera").text
 				except:
-					name = np.nan
+					name = 	np.nan
+					print("Name not found")
 
-				# property location
+				# Property location
 				try:
-					location = row.find_element(By.CLASS_NAME, "tupleNew__propType").text
+					location = row.find_element(By.CLASS_NAME, "tupleNew__tupleHeadingTopaz").text
 				except:
 					location = np.nan
-
-				# property price
+					print("Location not found")
+				
+				# Property price
 				try:
 					price = row.find_element(By.CLASS_NAME, "tupleNew__priceValWrap").text
 				except:
 					price = np.nan
+					print("Price not found")
 
 				# property area and bhk
 				try:
 					elements = row.find_elements(By.CLASS_NAME, "tupleNew__area1Type")
 				except:
-					area, bhk = [np.nan, np.nan]
+					area, bhk =[np.nan, np.nan]
+					print("Area and BHK not found")
 				else:
 					area, bhk = [ele.text for ele in elements]
-					
-				property = {
+			
+   			# store data in dictionary			
+			property = {
 					"name": name,
 					"location": location,
 					"price": price,
 					"area": area,
-					"bhk": bhk
+					"bhk": bhk	
 				}
-				data.append(property)
-			
+   
+			print(property)
+
+			# append dictionary to data list
+			data.append(property)	
+	
+			# click on Next Page button
 			wait.until(
 				EC.element_to_be_clickable((By.XPATH, "//a[normalize-space()='Next Page >']"))
 			).click()
